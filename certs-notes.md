@@ -49,3 +49,74 @@ openssl x509 -req -days 365 -in server.csr -CA ca.pem -CAkey ca.key -set_serial 
     ssl_verify_client optional; # or `on` if you require client key
 
 
+--------
+
+```
+# Create the CA Key and Certificate for signing Client Certs
+openssl genrsa -des3 -out ca.key 4096
+openssl req -new -x509 -days 365 -key ca.key -out ca.crt
+
+# Create the Server Key, CSR, and Certificate
+openssl genrsa -des3 -out server.key 1024
+openssl req -new -key server.key -out server.csr
+
+# We're self signing our own server cert here.  This is a no-no in production.
+openssl x509 -req -days 365 -in server.csr -CA ca.crt -CAkey ca.key -set_serial 01 -out server.crt
+
+# Create the Client Key and CSR
+openssl genrsa -des3 -out client.key 1024
+openssl req -new -key client.key -out client.csr
+
+# Sign the client certificate with our CA cert.  Unlike signing our own server cert, this is what we want to do.
+openssl x509 -req -days 365 -in client.csr -CA ca.crt -CAkey ca.key -set_serial 01 -out client.crt
+```
+
+
+
+```
+openssl genrsa -aes256 -passout pass:password -out ca.pass.key 4096
+openssl rsa -passin pass:password -in ca.pass.key -out ca.key
+openssl req -new -x509 -days 365 -key ca.key -out ca.crt
+#rm ca.pass.key
+
+# Create the Server Key, CSR, and Certificate
+openssl genrsa -aes256 -passout pass:password -out server.pass.key 4096
+openssl rsa -passin pass:password -in server.pass.key -out server.key
+openssl req -new -key server.key -out server.csr
+
+# We're self signing our own server cert here.  This is a no-no in production.
+openssl x509 -req -days 365 -in server.csr -CA ca.crt -CAkey ca.key -set_serial 01 -out server.crt
+
+
+
+# Create the Client Key and CSR
+openssl genrsa -aes256 -passout pass:password -out client.pass.key 4096
+openssl rsa -passin pass:password -in client.pass.key -out client.key
+openssl req -new -key client.key -out client.csr
+
+# Sign the client certificate with our CA cert.  Unlike signing our own server cert, this is what we want to do.
+openssl x509 -req -days 365 -in client.csr -CA ca.crt -CAkey ca.key -set_serial 01 -out client.crt
+
+# Bundle the private key & cert for end-user client use
+cat client.key client.crt ca.crt > client.full.pem
+
+# Bundle client key into a PFX file
+openssl pkcs12 -export -out client.full.pfx -inkey client.key -in client.pem -certfile ca.crt
+
+```
+
+
+
+
+oc create secret generic nginx-certs --from-file=.
+
+
+oc set volume dc/simple-nginx-reverseproxy --add --mount-path=/etc/nginx/certs --secret-name=nginx-certs
+
+oc set volume dc/nodejs-mongodb-example --add --mount-path=/etc/nginx/certs --secret-name=nginx-certs
+
+
+image-registry.openshift-image-registry.svc:5000/nginx/simple-nginx-reverseproxy@sha256:f50ebaeced5962029dd6a972db49686c85fddfe167b449a55512603b4aa11019
+
+
+
